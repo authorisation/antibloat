@@ -1,0 +1,84 @@
+diff --git a/frontend/cmake/os-linux.cmake b/frontend/cmake/os-linux.cmake
+index d146e7297..0c897e057 100644
+--- a/frontend/cmake/os-linux.cmake
++++ b/frontend/cmake/os-linux.cmake
+@@ -10,7 +10,6 @@ target_compile_definitions(
+   obs-studio
+   PRIVATE OBS_INSTALL_PREFIX="${OBS_INSTALL_PREFIX}" $<$<BOOL:${ENABLE_PORTABLE_CONFIG}>:ENABLE_PORTABLE_CONFIG>
+ )
+-target_link_libraries(obs-studio PRIVATE Qt::DBus)
+ 
+ if(Qt6_VERSION AND Qt6_VERSION VERSION_LESS "6.9.0")
+   target_link_libraries(obs-studio PRIVATE Qt::GuiPrivate)
+diff --git a/frontend/cmake/ui-qt.cmake b/frontend/cmake/ui-qt.cmake
+index f730b86d6..b61949003 100644
+--- a/frontend/cmake/ui-qt.cmake
++++ b/frontend/cmake/ui-qt.cmake
+@@ -1,9 +1,5 @@
+ find_package(Qt6 REQUIRED Widgets Network Svg Xml)
+ 
+-if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
+-  find_package(Qt6 REQUIRED Gui DBus)
+-endif()
+-
+ if(NOT TARGET OBS::qt-wrappers)
+   add_subdirectory("${CMAKE_SOURCE_DIR}/shared/qt/wrappers" "${CMAKE_BINARY_DIR}/shared/qt/wrappers")
+ endif()
+diff --git a/frontend/utility/platform-x11.cpp b/frontend/utility/platform-x11.cpp
+index 61b874368..b7b913832 100644
+--- a/frontend/utility/platform-x11.cpp
++++ b/frontend/utility/platform-x11.cpp
+@@ -24,9 +24,6 @@
+ #include <util/bmem.h>
+ #include <util/platform.h>
+ 
+-#include <QDBusConnection>
+-#include <QDBusReply>
+-
+ #if defined(__FreeBSD__) || defined(__DragonFly__)
+ #include <condition_variable>
+ #include <mutex>
+@@ -278,42 +275,5 @@ void TaskbarOverlaySetStatus(TaskbarOverlayStatus) {}
+ 
+ bool HighContrastEnabled()
+ {
+-	QDBusReply<QVariant> reply;
+-	QDBusMessage msgXdpSettingsVersion = QDBusMessage::createMethodCall("org.freedesktop.portal.Desktop",
+-									    "/org/freedesktop/portal/desktop",
+-									    "org.freedesktop.DBus.Properties", "Get");
+-	msgXdpSettingsVersion << "org.freedesktop.portal.Settings"
+-			      << "version";
+-
+-	reply = QDBusConnection::sessionBus().call(msgXdpSettingsVersion);
+-
+-	if (!reply.isValid()) {
+-		blog(LOG_WARNING, "Get on org.freedesktop.portal.Settings returned an invalid reply");
+-		return false;
+-	}
+-
+-	/* NOTE: org.freedesktop.portal.Settings got its contrast settings after
+-	 * the ReadOne method. So assumes that if ReadOne is not available, contrast
+-	 * isn't available either. */
+-	if (uint32_t version = reply.value().toUInt() < 2) {
+-		blog(LOG_WARNING, "org.freedesktop.portal.Settings version %u does not support ReadOne", version);
+-		return false;
+-	}
+-
+-	/* NOTE: If contrast is not available if will return 0 (false). */
+-	QDBusMessage msgXdpSettingsContrast =
+-		QDBusMessage::createMethodCall("org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop",
+-					       "org.freedesktop.portal.Settings", "ReadOne");
+-
+-	msgXdpSettingsContrast << "org.freedesktop.appearance"
+-			       << "contrast";
+-
+-	reply = QDBusConnection::sessionBus().call(msgXdpSettingsContrast);
+-
+-	if (!reply.isValid()) {
+-		blog(LOG_WARNING, "ReadOne on org.freedesktop.portal.Settings returned an invalid reply");
+-		return false;
+-	}
+-
+-	return reply.value().toUInt() != 0;
++	return false;
+ }
