@@ -34,6 +34,7 @@ RDEPEND="
 	sys-libs/readline:0=
 	virtual/minizip:=
 	virtual/zlib:=
+	dev-libs/botan
 	X? (
 		dev-qt/qtbase:6[X]
 		x11-libs/libXext
@@ -65,6 +66,9 @@ src_prepare() {
 	sed -i 's/\r$//' \
 		src/cli/DatabaseCommand.cpp \
 		src/thirdparty/CMakeLists.txt || die
+
+	# Unbundle zxcvbn, bug 958062
+	rm -r ./src/thirdparty/zxcvbn || die
 
 	if has_version "<dev-libs/zxcvbn-c-2.6" ; then
 		eapply "${FILESDIR}"/${PN}-2.7.10-zxcvbn.patch
