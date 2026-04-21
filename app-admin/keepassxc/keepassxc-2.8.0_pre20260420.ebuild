@@ -23,7 +23,6 @@ RESTRICT="!test? ( test )"
 
 # Include path changed in zxcvbn-c-2.6
 RDEPEND="
-	app-crypt/argon2:=
 	dev-libs/libusb:1
 	dev-libs/zxcvbn-c
 	dev-qt/qtbase:6
@@ -34,7 +33,7 @@ RDEPEND="
 	sys-libs/readline:0=
 	virtual/minizip:=
 	virtual/zlib:=
-	dev-libs/botan
+	>dev-libs/botan-3.0.0
 	X? (
 		dev-qt/qtbase:6[X]
 		x11-libs/libXext
