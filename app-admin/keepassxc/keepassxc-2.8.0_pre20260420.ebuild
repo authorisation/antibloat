@@ -110,3 +110,16 @@ src_configure() {
 	cmake_src_configure
 }
 
+pkg_postinst() {
+	if ! use browser && ! use keyring; then
+		ewarn "NOTICE: Due to the browser and keyring useflags being disabled, a dbus removal patch was applied!"
+		ewarn "This can cause issues and is experimental so caution is advised."
+		ewarn ""
+		ewarn "The following features will **NOT** work:"
+		ewarn " - Auto locking when screen locks or suspends"
+		ewarn " - Some stuff related to theme changes system wide will not be recognized"
+		ewarn " - Among possibly other things ..."
+		ewarn ""
+		ewarn "You have been warned!"
+	fi
+}
