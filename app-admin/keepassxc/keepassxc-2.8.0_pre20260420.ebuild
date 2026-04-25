@@ -41,9 +41,8 @@ RDEPEND="
 		x11-libs/libXi
 		x11-libs/libXtst
 	)
-	browser? (
-		dev-qt/qtbase:6[dbus]
-	)
+	browser? ( dev-qt/qtbase:6[dbus] )
+    keyring? ( dev-qt/qtbase:6[dbus] )
 "
 DEPEND="
 	${RDEPEND}
