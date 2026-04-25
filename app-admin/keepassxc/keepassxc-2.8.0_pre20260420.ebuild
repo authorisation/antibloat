@@ -41,6 +41,9 @@ RDEPEND="
 		x11-libs/libXi
 		x11-libs/libXtst
 	)
+	browser? (
+		dev-qt/qtbase:6[dbus]
+	)
 "
 DEPEND="
 	${RDEPEND}
@@ -58,6 +61,11 @@ PATCHES=(
 )
 
 src_prepare() {
+	# browser & keyring useflags depend on dbus, so we only patch dbus out if they're disabled
+	if ! use browser && ! use keyring; then
+        PATCHES+=( "${FILESDIR}/${PN}-2.8.0-no_dbus.patch" )
+    fi
+
 	if ! [[ "${PV}" =~ _beta|9999 ]]; then
 		echo "${PV}" > .version || die
 	fi
