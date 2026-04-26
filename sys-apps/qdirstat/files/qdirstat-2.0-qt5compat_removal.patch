@@ -1,0 +1,837 @@
+diff --git a/src/DirTreeCache.cpp b/src/DirTreeCache.cpp
+index 1be49f6..b1f40ae 100644
+--- a/src/DirTreeCache.cpp
++++ b/src/DirTreeCache.cpp
+@@ -804,7 +804,8 @@ QString CacheReader::unescapedPath( const QString & rawPath ) const
+ 
+ QString CacheReader::cleanPath( const QString & rawPath ) const
+ {
+-    QString clean = _multiSlash.replaceIn( rawPath, "/" );
++    QString clean = rawPath;
++    clean.replace( _multiSlash, "/" );
+ 
+     return clean;
+ }
+diff --git a/src/DirTreeCache.h b/src/DirTreeCache.h
+index b60681e..0d67997 100644
+--- a/src/DirTreeCache.h
++++ b/src/DirTreeCache.h
+@@ -301,7 +301,7 @@ namespace QDirStat
+ 	DirInfo *	_lastDir;
+ 	DirInfo *	_lastExcludedDir;
+ 	QString		_lastExcludedDirUrl;
+-        QRegExp         _multiSlash;
++        QRegularExpression _multiSlash;
+         bool            _withUidGidPerm;
+     };
+ 
+diff --git a/src/DirTreePatternFilter.cpp b/src/DirTreePatternFilter.cpp
+index 9f4af15..d0c4e2f 100644
+--- a/src/DirTreePatternFilter.cpp
++++ b/src/DirTreePatternFilter.cpp
+@@ -29,7 +29,7 @@ DirTreeFilter * DirTreePatternFilter::create( const QString & pattern )
+ 	QString suffix = pattern;
+ 	suffix.remove( 0, 1 ); // Remove the leading "*"
+ 
+-	if ( QRegExp( "^\\.[a-zA-Z0-9]+" ).exactMatch( suffix ) )
++	if ( QRegularExpression( "^\\.[a-zA-Z0-9]+" ).match( suffix ).hasMatch() )
+ 	    filter = new DirTreeSuffixFilter( suffix );
+     }
+ 
+@@ -49,7 +49,7 @@ DirTreePatternFilter::DirTreePatternFilter( const QString & pattern ):
+ 	QString( "*/" ) + _pattern;
+ 
+     logDebug() << "Creating pattern filter matching against " << pat << endl;
+-    _regExp = QRegExp( pat, Qt::CaseSensitive, QRegExp::Wildcard );
++    _regExp = QRegularExpression( QRegularExpression::wildcardToRegularExpression( pat ) );
+ }
+ 
+ 
+@@ -61,7 +61,7 @@ DirTreePatternFilter::~DirTreePatternFilter()
+ 
+ bool DirTreePatternFilter::ignore( const QString & path ) const
+ {
+-    bool match = _regExp.exactMatch( path );
++    bool match = _regExp.match( path ).hasMatch();
+ 
+ #if VERBOSE_MATCH
+     if ( match )
+diff --git a/src/DirTreePatternFilter.h b/src/DirTreePatternFilter.h
+index cbbe166..9bcd29e 100644
+--- a/src/DirTreePatternFilter.h
++++ b/src/DirTreePatternFilter.h
+@@ -10,7 +10,7 @@
+ #ifndef DirTreePatternFilter_h
+ #define DirTreePatternFilter_h
+ 
+-#include <QRegExp>
++#include <QRegularExpression>
+ 
+ #include "DirTreeFilter.h"
+ 
+@@ -64,7 +64,7 @@ namespace QDirStat
+     protected:
+ 
+ 	QString _pattern;
+-        QRegExp _regExp;
++        QRegularExpression _regExp;
+ 
+     };	// class DirTreePatternFilter
+ 
+diff --git a/src/DpkgPkgManager.cpp b/src/DpkgPkgManager.cpp
+index 9d3d5ae..dc90130 100644
+--- a/src/DpkgPkgManager.cpp
++++ b/src/DpkgPkgManager.cpp
+@@ -26,7 +26,7 @@ using SysUtil::haveCommand;
+ 
+ bool DpkgPkgManager::isPrimaryPkgManager()
+ {
+-    return tryRunCommand( "/usr/bin/dpkg -S /usr/bin/dpkg", QRegExp( "^dpkg:.*" ) );
++    return tryRunCommand( "/usr/bin/dpkg -S /usr/bin/dpkg", QRegularExpression( "^dpkg:.*" ) );
+ }
+ 
+ 
+diff --git a/src/ExcludeRules.cpp b/src/ExcludeRules.cpp
+index 492eaeb..321ee9d 100644
+--- a/src/ExcludeRules.cpp
++++ b/src/ExcludeRules.cpp
+@@ -22,10 +22,12 @@
+ using namespace QDirStat;
+ 
+ 
+-ExcludeRule::ExcludeRule( const QRegExp & regexp,
+-                          bool            useFullPath,
+-                          bool            checkAnyFileChild ):
++ExcludeRule::ExcludeRule( const QRegularExpression & regexp,
++                          PatternSyntax               syntax,
++                          bool                        useFullPath,
++                          bool                        checkAnyFileChild ):
+     _regexp( regexp ),
++    _patternSyntax( syntax ),
+     _useFullPath( useFullPath ),
+     _checkAnyFileChild( checkAnyFileChild )
+ {
+@@ -33,10 +35,11 @@ ExcludeRule::ExcludeRule( const QRegExp & regexp,
+ }
+ 
+ 
+-ExcludeRule::ExcludeRule( const QString & regexp,
++ExcludeRule::ExcludeRule( const QString & pattern,
+                           bool            useFullPath,
+                           bool            checkAnyFileChild ):
+-    _regexp( QRegExp( regexp ) ),
++    _regexp( QRegularExpression( pattern ) ),
++    _patternSyntax( RegExp ),
+     _useFullPath( useFullPath ),
+     _checkAnyFileChild( checkAnyFileChild )
+ {
+@@ -63,7 +66,7 @@ bool ExcludeRule::match( const QString & fullPath, const QString & fileName )
+     if ( _regexp.pattern().isEmpty() )
+ 	return false;
+ 
+-    return _regexp.exactMatch( matchText );
++    return _regexp.match( matchText ).hasMatch();
+ }
+ 
+ 
+@@ -81,7 +84,7 @@ bool ExcludeRule::matchDirectChildren( DirInfo * dir )
+     {
+         if ( ! (*it)->isDir() )
+         {
+-            if ( _regexp.exactMatch( (*it)->name() ) )
++            if ( _regexp.match( (*it)->name() ).hasMatch() )
+                 return true;
+         }
+ 
+@@ -115,9 +118,9 @@ ExcludeRules::ExcludeRules( const QStringList & paths ):
+ 
+     foreach ( const QString & path, paths )
+     {
+-        QRegExp regexp( path );
+-        regexp.setPatternSyntax( QRegExp::Wildcard );
++        QRegularExpression regexp( QRegularExpression::wildcardToRegularExpression( path ) );
+         ExcludeRule * rule = new ExcludeRule( regexp,
++                                              ExcludeRule::Wildcard,
+                                               true,    // useFullPath
+                                               false ); // checkAnyFileChild
+         CHECK_NEW( rule );
+@@ -161,11 +164,11 @@ void ExcludeRules::add( ExcludeRule * rule )
+ }
+ 
+ 
+-void ExcludeRules::add( const QRegExp & regexp,
+-                        bool            useFullPath,
+-                        bool            checkAnyFileChild )
++void ExcludeRules::add( const QRegularExpression & regexp,
++                        bool                        useFullPath,
++                        bool                        checkAnyFileChild )
+ {
+-    ExcludeRule * rule = new ExcludeRule( regexp, useFullPath, checkAnyFileChild );
++    ExcludeRule * rule = new ExcludeRule( regexp, ExcludeRule::RegExp, useFullPath, checkAnyFileChild );
+     CHECK_NEW( rule );
+ 
+     instance()->add( rule );
+@@ -176,7 +179,7 @@ void ExcludeRules::add( const QString & regexp,
+                         bool            useFullPath,
+                         bool            checkAnyFileChild )
+ {
+-    add( QRegExp( regexp ), useFullPath, checkAnyFileChild );
++    add( QRegularExpression( regexp ), useFullPath, checkAnyFileChild );
+ }
+ 
+ 
+@@ -281,8 +284,8 @@ void ExcludeRules::addDefaultRules()
+ {
+     logInfo() << "Adding default exclude rules" << endl;
+ 
+-    QRegExp regexp( ".snapshot", Qt::CaseSensitive, QRegExp::FixedString );
+-    ExcludeRule * rule = new ExcludeRule( regexp );
++    QRegularExpression regexp( QRegularExpression::escape( ".snapshot" ) );
++    ExcludeRule * rule = new ExcludeRule( regexp, ExcludeRule::FixedString );
+     CHECK_NEW( rule );
+     add( rule );
+     _defaultRulesAdded = true;
+@@ -313,15 +316,33 @@ void ExcludeRules::readSettings()
+ 	    bool useFullPath       = settings.value( "UseFullPath",	  false ).toBool();
+             bool checkAnyFileChild = settings.value( "CheckAnyFileChild", false ).toBool();
+ 	    int syntax = readEnumEntry( settings, "Syntax",
+-					QRegExp::RegExp,
++					ExcludeRule::RegExp,
+ 					patternSyntaxMapping() );
+ 
+-	    QRegExp regexp( pattern,
+-			    caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive,
+-			    static_cast<QRegExp::PatternSyntax>( syntax ) );
++	    QRegularExpression regexp;
++	    Qt::CaseSensitivity cs = caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive;
++
++	    switch ( static_cast<ExcludeRule::PatternSyntax>( syntax ) )
++	    {
++		case ExcludeRule::Wildcard:
++		    regexp.setPattern( QRegularExpression::wildcardToRegularExpression( pattern ) );
++		    break;
++		case ExcludeRule::FixedString:
++		    regexp.setPattern( QRegularExpression::escape( pattern ) );
++		    break;
++		default: // RegExp
++		    regexp.setPattern( pattern );
++		    break;
++	    }
++
++	    if ( cs == Qt::CaseInsensitive )
++		regexp.setPatternOptions( QRegularExpression::CaseInsensitiveOption );
+ 
+ 	    if ( ! pattern.isEmpty() && regexp.isValid() )
+-		add( regexp, useFullPath, checkAnyFileChild );
++		add( new ExcludeRule( regexp,
++		                      static_cast<ExcludeRule::PatternSyntax>( syntax ),
++		                      useFullPath,
++		                      checkAnyFileChild ) );
+ 	    else
+ 	    {
+ 		logError() << "Invalid regexp: \"" << regexp.pattern()
+@@ -353,19 +374,24 @@ void ExcludeRules::writeSettings()
+     for ( int i=0; i < _rules.size(); ++i )
+     {
+ 	ExcludeRule * rule = _rules.at(i);
+-	QRegExp regexp = rule->regexp();
++	const QRegularExpression & regexp = rule->regexp();
+ 
+ 	if ( ! regexp.pattern().isEmpty() )
+ 	{
+ 	    settings.beginGroup( "ExcludeRule", i+1 );
+ 
+-	    settings.setValue( "Pattern",	    regexp.pattern() );
+-	    settings.setValue( "CaseSensitive",     regexp.caseSensitivity() == Qt::CaseSensitive );
++	    // Store the original pattern (before wildcard/fixed-string conversion)
++	    // by reconstructing it from the syntax type.
++	    QString pattern = regexp.pattern();
++	    bool caseSensitive = ! regexp.patternOptions().testFlag( QRegularExpression::CaseInsensitiveOption );
++
++	    settings.setValue( "Pattern",	    pattern );
++	    settings.setValue( "CaseSensitive",     caseSensitive );
+ 	    settings.setValue( "UseFullPath",	    rule->useFullPath()       );
+ 	    settings.setValue( "CheckAnyFileChild", rule->checkAnyFileChild() );
+ 
+ 	    writeEnumEntry( settings, "Syntax",
+-			    regexp.patternSyntax(),
++			    rule->patternSyntax(),
+ 			    patternSyntaxMapping() );
+ 
+ 	    settings.endGroup(); // [ExcludeRule_01], [ExcludeRule_02], ...
+diff --git a/src/ExcludeRules.h b/src/ExcludeRules.h
+index 8896ab5..b7e3d94 100644
+--- a/src/ExcludeRules.h
++++ b/src/ExcludeRules.h
+@@ -12,7 +12,7 @@
+ 
+ #include <QObject>
+ #include <QString>
+-#include <QRegExp>
++#include <QRegularExpression>
+ #include <QList>
+ 
+ #include "LogStream.h"
+@@ -30,8 +30,19 @@ namespace QDirStat
+     {
+     public:
+ 
++        /**
++         * Pattern syntax constants (mirrors the old QRegExp::PatternSyntax
++         * values that were persisted in settings, kept for compatibility).
++         **/
++        enum PatternSyntax
++        {
++            RegExp      = 0,
++            Wildcard    = 1,
++            FixedString = 2
++        };
++
+ 	/**
+-	 * Constructor from a QRegExp.
++	 * Constructor from a QRegularExpression.
+ 	 *
+ 	 * 'useFullPath' indicates if this exclude rule uses the full path
+ 	 * ('true') or only the file name without path ('false') for matching.
+@@ -41,9 +52,10 @@ namespace QDirStat
+          * name of the directory itself. That makes it possible to exclude a
+          * directory that contains a file ".nobackup".
+ 	 **/
+-	ExcludeRule( const QRegExp & regexp,
+-                     bool            useFullPath       = false,
+-                     bool            checkAnyFileChild = false );
++	ExcludeRule( const QRegularExpression & regexp,
++                     PatternSyntax               syntax            = RegExp,
++                     bool                        useFullPath       = false,
++                     bool                        checkAnyFileChild = false );
+ 
+ 	/**
+ 	 * Constructor from a QString. The string will be used as a regexp.
+@@ -56,7 +68,7 @@ namespace QDirStat
+          * name of the directory itself. That makes it possible to exclude a
+          * directory that contains a file ".nobackup".
+ 	 **/
+-	ExcludeRule( const QString & regexp,
++	ExcludeRule( const QString & pattern,
+                      bool            useFullPath       = false,
+                      bool            checkAnyFileChild = false );
+ 
+@@ -87,12 +99,22 @@ namespace QDirStat
+ 	/**
+ 	 * Returns this rule's regular expression.
+ 	 **/
+-	const QRegExp & regexp() const { return _regexp; }
++	const QRegularExpression & regexp() const { return _regexp; }
+ 
+ 	/**
+ 	 * Change this rule's regular expression.
+ 	 **/
+-	void setRegexp( const QRegExp & regexp ) { _regexp = regexp; }
++	void setRegexp( const QRegularExpression & regexp ) { _regexp = regexp; }
++
++        /**
++         * Return the pattern syntax used when this rule was created.
++         **/
++        PatternSyntax patternSyntax() const { return _patternSyntax; }
++
++        /**
++         * Set the pattern syntax.
++         **/
++        void setPatternSyntax( PatternSyntax syntax ) { _patternSyntax = syntax; }
+ 
+ 	/**
+ 	 * Return 'true' if this exclude rule uses the full path to match
+@@ -119,9 +141,10 @@ namespace QDirStat
+ 
+     private:
+ 
+-	QRegExp _regexp;
+-	bool	_useFullPath;
+-        bool    _checkAnyFileChild;
++	QRegularExpression _regexp;
++        PatternSyntax      _patternSyntax;
++	bool	           _useFullPath;
++        bool               _checkAnyFileChild;
+     };
+ 
+ 
+@@ -189,9 +212,9 @@ namespace QDirStat
+ 	 * Create a new rule with 'regexp', 'useFullPath' and
+ 	 * 'checkAnyFileChild' and add it to this rule set.
+ 	 **/
+-	static void add( const QRegExp & regexp,
+-                         bool            useFullPath       = false,
+-                         bool            checkAnyFileChild = false );
++	static void add( const QRegularExpression & regexp,
++                         bool                        useFullPath       = false,
++                         bool                        checkAnyFileChild = false );
+ 
+ 	static void add( const QString & regexp,
+                          bool            useFullPath       = false,
+diff --git a/src/ExcludeRulesConfigPage.cpp b/src/ExcludeRulesConfigPage.cpp
+index 8e6f17e..e964551 100644
+--- a/src/ExcludeRulesConfigPage.cpp
++++ b/src/ExcludeRulesConfigPage.cpp
+@@ -102,7 +102,7 @@ void ExcludeRulesConfigPage::patternChanged( const QString & newPattern )
+     if ( currentItem )
+     {
+ 	ExcludeRule * excludeRule = EXCLUDE_RULE_CAST( value( currentItem ) );
+-	QRegExp regexp = excludeRule->regexp();
++	QRegularExpression regexp = excludeRule->regexp();
+ 	regexp.setPattern( newPattern );
+ 	excludeRule->setRegexp( regexp );
+ 	currentItem->setText( excludeRule->regexp().pattern() );
+@@ -124,18 +124,28 @@ void ExcludeRulesConfigPage::save( void * value )
+     if ( ! excludeRule || updatesLocked() )
+ 	return;
+ 
+-    QRegExp regexp;
++    QString pattern = _ui->patternLineEdit->text();
++    ExcludeRule::PatternSyntax syntax = ExcludeRule::RegExp;
++    QRegularExpression regexp;
+ 
+     if ( _ui->regexpRadioButton->isChecked() )
+-	regexp.setPatternSyntax( QRegExp::RegExp );
++    {
++	syntax = ExcludeRule::RegExp;
++	regexp.setPattern( pattern );
++    }
+     else if ( _ui->wildcardsRadioButton->isChecked() )
+-	regexp.setPatternSyntax( QRegExp::Wildcard );
++    {
++	syntax = ExcludeRule::Wildcard;
++	regexp.setPattern( QRegularExpression::wildcardToRegularExpression( pattern ) );
++    }
+     else if ( _ui->fixedStringRadioButton->isChecked() )
+-	regexp.setPatternSyntax( QRegExp::FixedString );
+-
+-    regexp.setPattern( _ui->patternLineEdit->text() );
++    {
++	syntax = ExcludeRule::FixedString;
++	regexp.setPattern( QRegularExpression::escape( pattern ) );
++    }
+ 
+     excludeRule->setRegexp( regexp );
++    excludeRule->setPatternSyntax( syntax );
+     excludeRule->setUseFullPath( _ui->fullPathRadioButton->isChecked() );
+     excludeRule->setCheckAnyFileChild( _ui->checkAnyFileChildRadioButton->isChecked() );
+ }
+@@ -160,13 +170,13 @@ void ExcludeRulesConfigPage::load( void * value )
+     enableEditRuleWidgets( true );
+     _ui->patternLineEdit->setText( excludeRule->regexp().pattern() );
+ 
+-    switch ( excludeRule->regexp().patternSyntax() )
++    switch ( excludeRule->patternSyntax() )
+     {
+-	case QRegExp::RegExp:	   _ui->regexpRadioButton->setChecked( true );
++	case ExcludeRule::RegExp:      _ui->regexpRadioButton->setChecked( true );
+ 	    break;
+-	case QRegExp::Wildcard:	   _ui->wildcardsRadioButton->setChecked( true );
++	case ExcludeRule::Wildcard:    _ui->wildcardsRadioButton->setChecked( true );
+ 	    break;
+-	case QRegExp::FixedString: _ui->fixedStringRadioButton->setChecked( true );
++	case ExcludeRule::FixedString: _ui->fixedStringRadioButton->setChecked( true );
+ 	    break;
+ 
+ 	default:
+@@ -185,8 +195,8 @@ void ExcludeRulesConfigPage::load( void * value )
+ 
+ void * ExcludeRulesConfigPage::createValue()
+ {
+-    QRegExp regExp( "", Qt::CaseSensitive, QRegExp::Wildcard );
+-    ExcludeRule * excludeRule = new ExcludeRule( regExp );
++    QRegularExpression regExp( QRegularExpression::wildcardToRegularExpression( "" ) );
++    ExcludeRule * excludeRule = new ExcludeRule( regExp, ExcludeRule::Wildcard );
+     CHECK_NEW( excludeRule );
+     ExcludeRules::instance()->add( excludeRule );
+ 
+diff --git a/src/FileSearchFilter.cpp b/src/FileSearchFilter.cpp
+index 2fc5122..2e4b152 100644
+--- a/src/FileSearchFilter.cpp
++++ b/src/FileSearchFilter.cpp
+@@ -30,7 +30,7 @@ FileSearchFilter::FileSearchFilter( DirInfo *       subtree,
+         guessFilterMode();
+ 
+     if ( _filterMode == Wildcard )
+-        _regexp.setPatternSyntax( QRegExp::Wildcard );
++        _regexp.setPattern( QRegularExpression::wildcardToRegularExpression( _pattern ) );
+ 
+-    _regexp.setCaseSensitivity( Qt::CaseInsensitive );
++    _regexp.setPatternOptions( QRegularExpression::CaseInsensitiveOption );
+ }
+diff --git a/src/FileSearchFilter.h b/src/FileSearchFilter.h
+index 6a8b3e9..b6ec32b 100644
+--- a/src/FileSearchFilter.h
++++ b/src/FileSearchFilter.h
+@@ -10,7 +10,7 @@
+ #define FileSearchFilter_h
+ 
+ #include <QString>
+-#include <QRegExp>
++#include <QRegularExpression>
+ 
+ #include "LogStream.h"
+ #include "SearchFilter.h"
+diff --git a/src/FileTypeStats.cpp b/src/FileTypeStats.cpp
+index d62dc5a..46ec58e 100644
+--- a/src/FileTypeStats.cpp
++++ b/src/FileTypeStats.cpp
+@@ -308,7 +308,7 @@ bool FileTypeStats::isCruft( const QString & suffix ) const
+ 
+     int count	 = _suffixCount[ suffix ];
+     int len	 = suffix.size();
+-    int letters	 = QRegExp( "[a-zA-Z]" ).countIn( suffix );
++    int letters	 = suffix.count( QRegularExpression( "[a-zA-Z]" ) );
+     float lettersPercent = len > 0 ? (100.0 * letters) / len : 0.0;
+ 
+     if ( letters == 0 )
+diff --git a/src/MainWindowUnpkg.cpp b/src/MainWindowUnpkg.cpp
+index 4d9b3a9..19780f9 100644
+--- a/src/MainWindowUnpkg.cpp
++++ b/src/MainWindowUnpkg.cpp
+@@ -121,7 +121,7 @@ void MainWindow::setUnpkgFilters( const UnpkgSettings & unpkgSettings,
+ QString MainWindow::parseUnpkgStartingDir( const UnpkgSettings & unpkgSettings )
+ {
+     QString dir = unpkgSettings.startingDir;
+-    dir = QRegExp( "^unpkg:" ).removeIn( dir );
++    dir.remove( QRegularExpression( "^unpkg:" ) );
+ 
+     if ( dir != unpkgSettings.startingDir )
+ 	logInfo() << "Parsed starting dir: " << dir << endl;
+diff --git a/src/MimeCategorizer.cpp b/src/MimeCategorizer.cpp
+index 44941bc..158e716 100644
+--- a/src/MimeCategorizer.cpp
++++ b/src/MimeCategorizer.cpp
+@@ -151,9 +151,9 @@ MimeCategory * MimeCategorizer::matchPatterns( const QString & filename ) const
+     {
+ 	if ( category )
+ 	{
+-	    foreach ( const QRegExp & pattern, category->patternList() )
++	    foreach ( const QRegularExpression & pattern, category->patternList() )
+ 	    {
+-		if ( pattern.exactMatch( filename ) )
++		if ( pattern.match( filename ).hasMatch() )
+ 		    return category;
+ 	    }
+ 	}
+diff --git a/src/MimeCategory.cpp b/src/MimeCategory.cpp
+index c564171..e00b172 100644
+--- a/src/MimeCategory.cpp
++++ b/src/MimeCategory.cpp
+@@ -84,9 +84,11 @@ void MimeCategory::addPattern( const QString &	   rawPattern,
+ 	addSuffix( pattern, caseSensitivity );
+     else
+     {
+-	_patternList << QRegExp ( ( caseSensitivity == Qt::CaseInsensitive ?
+-				    pattern.toLower() : pattern ),
+-				  caseSensitivity, QRegExp::Wildcard );
++	QString pat = ( caseSensitivity == Qt::CaseInsensitive ? pattern.toLower() : pattern );
++	QRegularExpression re( QRegularExpression::wildcardToRegularExpression( pat ) );
++	if ( caseSensitivity == Qt::CaseInsensitive )
++	    re.setPatternOptions( QRegularExpression::CaseInsensitiveOption );
++	_patternList << re;
+     }
+ }
+ 
+@@ -154,9 +156,10 @@ QStringList MimeCategory::humanReadablePatternList( const QRegExpList & patternL
+ {
+     QStringList result;
+ 
+-    foreach ( const QRegExp & pattern, patternList )
++    foreach ( const QRegularExpression & pattern, patternList )
+     {
+-	if ( pattern.caseSensitivity() == caseSensitivity )
++	bool patCaseInsensitive = pattern.patternOptions().testFlag( QRegularExpression::CaseInsensitiveOption );
++	if ( ( caseSensitivity == Qt::CaseInsensitive ) == patCaseInsensitive )
+ 	    result << pattern.pattern();
+     }
+ 
+diff --git a/src/MimeCategory.h b/src/MimeCategory.h
+index aac2720..0342cdb 100644
+--- a/src/MimeCategory.h
++++ b/src/MimeCategory.h
+@@ -14,14 +14,14 @@
+ #include <QList>
+ #include <QStringList>
+ #include <QColor>
+-#include <QRegExp>
++#include <QRegularExpression>
+ 
+ #include "LogStream.h"
+ 
+ 
+ namespace QDirStat
+ {
+-    typedef QList<QRegExp> QRegExpList;
++    typedef QList<QRegularExpression> QRegExpList;
+ 
+     /**
+      * Class that represents a category of MIME types like video, music,
+diff --git a/src/PacManPkgManager.cpp b/src/PacManPkgManager.cpp
+index 02fd4be..3c5eb4d 100644
+--- a/src/PacManPkgManager.cpp
++++ b/src/PacManPkgManager.cpp
+@@ -18,7 +18,7 @@ using namespace QDirStat;
+ bool PacManPkgManager::isPrimaryPkgManager()
+ {
+     return tryRunCommand( "/usr/bin/pacman -Qo /usr/bin/pacman",
+-                          QRegExp( ".*is owned by pacman.*" ) );
++                          QRegularExpression( ".*is owned by pacman.*" ) );
+ }
+ 
+ 
+@@ -46,7 +46,7 @@ QString PacManPkgManager::owningPkg( const QString & path )
+     // blank-separated section #4; let's remove the part before the package
+     // name.
+ 
+-    output = QRegExp( "^.*is owned by " ).removeIn( output );
++    output.remove( QRegularExpression( "^.*is owned by " ) );
+     QString pkg = output.section( " ", 0, 0 );
+ 
+     return pkg;
+diff --git a/src/PkgFilter.cpp b/src/PkgFilter.cpp
+index f283b76..ae93f6e 100644
+--- a/src/PkgFilter.cpp
++++ b/src/PkgFilter.cpp
+@@ -26,7 +26,7 @@ PkgFilter::PkgFilter( const QString & pattern,
+         guessFilterMode();
+ 
+     if ( _filterMode == Wildcard )
+-        _regexp.setPatternSyntax( QRegExp::Wildcard );
++        _regexp.setPattern( QRegularExpression::wildcardToRegularExpression( _pattern ) );
+ 
+     setCaseSensitive( _filterMode == ExactMatch );
+ }
+@@ -35,8 +35,8 @@ PkgFilter::PkgFilter( const QString & pattern,
+ void PkgFilter::normalizePattern()
+ {
+     QString oldPattern = _pattern;
+-    _pattern = QRegExp( "^Pkg:/*", Qt::CaseInsensitive ).removeIn( _pattern );
+-    _pattern = QRegExp( "/.*$" ).removeIn( _pattern );
++    _pattern.remove( QRegularExpression( "^Pkg:/*", QRegularExpression::CaseInsensitiveOption ) );
++    _pattern.remove( QRegularExpression( "/.*$" ) );
+ 
+     if ( _pattern != oldPattern )
+     {
+diff --git a/src/PkgFilter.h b/src/PkgFilter.h
+index 9d659ab..ca00315 100644
+--- a/src/PkgFilter.h
++++ b/src/PkgFilter.h
+@@ -10,7 +10,7 @@
+ #define PkgFilter_h
+ 
+ #include <QString>
+-#include <QRegExp>
++#include <QRegularExpression>
+ 
+ #include "LogStream.h"
+ #include "SearchFilter.h"
+diff --git a/src/RpmPkgManager.cpp b/src/RpmPkgManager.cpp
+index f6470ea..bb1e372 100644
+--- a/src/RpmPkgManager.cpp
++++ b/src/RpmPkgManager.cpp
+@@ -51,7 +51,7 @@ RpmPkgManager::RpmPkgManager():
+ bool RpmPkgManager::isPrimaryPkgManager()
+ {
+     return tryRunCommand( QString( "%1 -qf %1" ).arg( _rpmCommand ),
+-			  QRegExp( "^rpm.*" ) );
++			  QRegularExpression( "^rpm.*" ) );
+ }
+ 
+ 
+diff --git a/src/SearchFilter.cpp b/src/SearchFilter.cpp
+index cfb0228..f3c62c0 100644
+--- a/src/SearchFilter.cpp
++++ b/src/SearchFilter.cpp
+@@ -18,7 +18,7 @@ SearchFilter::SearchFilter( const QString & pattern,
+                             FilterMode      filterMode,
+                             FilterMode      defaultFilterMode ):
+     _pattern( pattern ),
+-    _regexp( pattern ),
++    _regexp( QRegularExpression( pattern ) ),
+     _filterMode( filterMode ),
+     _defaultFilterMode( defaultFilterMode )
+ {
+@@ -26,9 +26,9 @@ SearchFilter::SearchFilter( const QString & pattern,
+         guessFilterMode();
+ 
+     if ( _filterMode == Wildcard )
+-        _regexp.setPatternSyntax( QRegExp::Wildcard );
++        _regexp.setPattern( QRegularExpression::wildcardToRegularExpression( _pattern ) );
+ 
+-    _regexp.setCaseSensitivity( Qt::CaseInsensitive );
++    _regexp.setPatternOptions( QRegularExpression::CaseInsensitiveOption );
+ }
+ 
+ 
+@@ -41,7 +41,7 @@ void SearchFilter::guessFilterMode()
+     else if ( _pattern.startsWith( "=" ) )
+     {
+         _filterMode = ExactMatch;
+-        _pattern = QRegExp( "^=" ).removeIn( _pattern );
++        _pattern.remove( QRegularExpression( "^=" ) );
+         _regexp.setPattern( _pattern );
+     }
+     else if ( _pattern.contains( "*.*" ) )
+@@ -80,15 +80,17 @@ void SearchFilter::guessFilterMode()
+ 
+ bool SearchFilter::matches( const QString & str ) const
+ {
+-    Qt::CaseSensitivity caseSensitivity = _regexp.caseSensitivity();
++    Qt::CaseSensitivity caseSensitivity =
++        _regexp.patternOptions().testFlag( QRegularExpression::CaseInsensitiveOption )
++        ? Qt::CaseInsensitive : Qt::CaseSensitive;
+ 
+     switch ( _filterMode )
+     {
+         case Contains:   return str.contains  ( _pattern, caseSensitivity );
+         case StartsWith: return str.startsWith( _pattern, caseSensitivity );
+         case ExactMatch: return QString::compare( str, _pattern, caseSensitivity ) == 0;
+-        case Wildcard:   return _regexp.exactMatch( str );
+-        case RegExp:     return _regexp.containedIn( str );
++        case Wildcard:   return _regexp.match( str ).hasMatch();
++        case RegExp:     return _regexp.match( str ).hasMatch();
+         case SelectAll:  return true;
+         case Auto:
+             logWarning() << "Unexpected filter mode 'Auto' - assuming 'Contains'" << endl;
+@@ -102,8 +104,9 @@ bool SearchFilter::matches( const QString & str ) const
+ 
+ void SearchFilter::setCaseSensitive( bool sensitive )
+ {
+-    _regexp.setCaseSensitivity( sensitive ?
+-                                Qt::CaseSensitive : Qt::CaseInsensitive );
++    _regexp.setPatternOptions( sensitive
++                               ? QRegularExpression::NoPatternOption
++                               : QRegularExpression::CaseInsensitiveOption );
+ }
+ 
+ 
+diff --git a/src/SearchFilter.h b/src/SearchFilter.h
+index 32572ab..26824b9 100644
+--- a/src/SearchFilter.h
++++ b/src/SearchFilter.h
+@@ -10,7 +10,7 @@
+ #define SearchFilter_h
+ 
+ #include <QString>
+-#include <QRegExp>
++#include <QRegularExpression>
+ 
+ #include "LogStream.h"
+ 
+@@ -66,7 +66,7 @@ namespace QDirStat
+          * Return the regexp. This is only meaningful in filter modes RegExp
+          * and Wildcard.
+          **/
+-        const QRegExp & regexp() const { return _regexp; }
++        const QRegularExpression & regexp() const { return _regexp; }
+ 
+         /**
+          * Return the filter mode.
+@@ -77,7 +77,7 @@ namespace QDirStat
+          * Return 'true' if the matching is case sensitive, 'false if not.
+          **/
+         bool isCaseSensitive() const
+-            { return _regexp.caseSensitivity() == Qt::CaseSensitive; }
++            { return ! _regexp.patternOptions().testFlag( QRegularExpression::CaseInsensitiveOption ); }
+ 
+         /**
+          * Set the match to case sensitive ('true') or case insensitive
+@@ -102,7 +102,7 @@ namespace QDirStat
+         // Data members
+ 
+         QString         _pattern;
+-        QRegExp         _regexp;
++        QRegularExpression _regexp;
+         FilterMode      _filterMode;
+         FilterMode      _defaultFilterMode;
+ 
+diff --git a/src/SettingsHelpers.cpp b/src/SettingsHelpers.cpp
+index 0dca381..1c76144 100644
+--- a/src/SettingsHelpers.cpp
++++ b/src/SettingsHelpers.cpp
+@@ -9,10 +9,10 @@
+ 
+ #include <QSettings>
+ #include <QColor>
+-#include <QRegExp>
+ #include <QWidget>
+ 
+ #include "SettingsHelpers.h"
++#include "ExcludeRules.h"
+ #include "Settings.h"
+ #include "Exception.h"
+ #include "Logger.h"
+@@ -165,12 +165,9 @@ namespace QDirStat
+ 
+ 	if ( mapping.isEmpty() )
+ 	{
+-	    mapping[ QRegExp::RegExp	     ] = "RegExp";
+-	    mapping[ QRegExp::Wildcard	     ] = "Wildcard";
+-	    mapping[ QRegExp::FixedString    ] = "FixedString";
+-	    mapping[ QRegExp::RegExp2	     ] = "RegExp2";
+-	    mapping[ QRegExp::WildcardUnix   ] = "WildcardUnix";
+-	    mapping[ QRegExp::W3CXmlSchema11 ] = "W3CXmlSchema11";
++	    mapping[ ExcludeRule::RegExp      ] = "RegExp";
++	    mapping[ ExcludeRule::Wildcard    ] = "Wildcard";
++	    mapping[ ExcludeRule::FixedString ] = "FixedString";
+ 	}
+ 
+ 	return mapping;
+diff --git a/src/SysUtil.cpp b/src/SysUtil.cpp
+index 66a8a90..51f416c 100644
+--- a/src/SysUtil.cpp
++++ b/src/SysUtil.cpp
+@@ -28,7 +28,7 @@ using namespace QDirStat;
+ 
+ 
+ bool SysUtil::tryRunCommand( const QString & commandLine,
+-			     const QRegExp & expectedResult,
++			     const QRegularExpression & expectedResult,
+ 			     bool	     logCommand,
+ 			     bool	     logOutput	)
+ {
+@@ -43,7 +43,7 @@ bool SysUtil::tryRunCommand( const QString & commandLine,
+ 	return false;
+     }
+ 
+-    bool expected = expectedResult.exactMatch( output );
++    bool expected = expectedResult.match( output ).hasMatch();
+     // logDebug() << "Expected: " << expected << endl;
+ 
+     return expected;
+diff --git a/src/SysUtil.h b/src/SysUtil.h
+index 9a6d145..57d4608 100644
+--- a/src/SysUtil.h
++++ b/src/SysUtil.h
+@@ -13,7 +13,7 @@
+ #include <sys/types.h> // uid_t
+ 
+ #include <QString>
+-#include <QRegExp>
++#include <QRegularExpression>
+ 
+ 
+ // Override these before #include
+@@ -46,7 +46,7 @@ namespace QDirStat
+ 	 * log the command's output if 'logOutput' is 'true'.
+ 	 **/
+ 	bool tryRunCommand( const QString & commandLine,
+-			    const QRegExp & expectedResult,
++			    const QRegularExpression & expectedResult,
+ 			    bool	    logCommand	= LOG_COMMANDS,
+ 			    bool	    logOutput	= LOG_OUTPUT   );
+ 
+diff --git a/src/src.pro b/src/src.pro
+index 1b9194c..cf23d49 100644
+--- a/src/src.pro
++++ b/src/src.pro
+@@ -19,8 +19,6 @@
+ TEMPLATE	 = app
+ QT		+= widgets
+ 
+-# QRegExp
+-QT		+= core5compat
+ 
+ 
+ # Commented out to get -O2 optimization by default (issue #160)
