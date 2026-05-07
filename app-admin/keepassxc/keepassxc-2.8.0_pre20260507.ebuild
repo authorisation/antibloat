@@ -5,11 +5,11 @@ EAPI=8
 
 inherit cmake xdg
 
-DESCRIPTION="KeePassXC - KeePass Cross-platform Community Edition, QT6 fork by varjolintu"
+DESCRIPTION="KeePassXC - KeePass Cross-platform Community Edition, QT6 develop branch"
 HOMEPAGE="https://keepassxc.org"
 
-GIT_HASH="48009926399a0f53c6b38c6a8c303119feb71f0d"
-SRC_URI="https://github.com/varjolintu/keepassxc/archive/${GIT_HASH}.tar.gz -> ${P}.tar.gz"
+GIT_HASH="7c7ca4575e7fe6c3412d3fffcd1d5ad580211a17"
+SRC_URI="https://github.com/keepassxreboot/keepassxc/archive/${GIT_HASH}.tar.gz -> ${P}.tar.gz"
 
 S="${WORKDIR}/${PN}-${GIT_HASH}"
 

@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d88ba52..de169b4 100644
+index 2fecaf8..714618d 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -409,9 +409,7 @@ endif()
+@@ -411,9 +411,7 @@ endif()
  
  # Find Qt
  set(QT_COMPONENTS Core Network Concurrent Gui Svg Widgets Test LinguistTools)
@@ -14,7 +14,7 @@ index d88ba52..de169b4 100644
              /usr/local/opt/qt/lib/cmake
              /usr/local/Cellar/qt/*/lib/cmake
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 66108ef..fdc815b 100644
+index 1bf2a79..62f1790 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -243,20 +243,6 @@ if(UNIX AND NOT APPLE)
@@ -38,15 +38,15 @@ index 66108ef..fdc815b 100644
  endif()
  
  if(WIN32)
-@@ -365,7 +351,7 @@ if(HAIKU)
+@@ -364,7 +350,7 @@ if(HAIKU)
      target_link_libraries(keepassxc_gui network)
  endif()
  if(UNIX AND NOT APPLE)
 -    target_link_libraries(keepassxc_core Qt6::DBus ${LIBUSB_LIBRARIES})
 +    target_link_libraries(keepassxc_core ${LIBUSB_LIBRARIES})
-     target_include_directories(keepassxc_gui PRIVATE ${Qt5Gui_PRIVATE_INCLUDE_DIRS})
-     if(WITH_X11)
-         target_link_libraries(keepassxc_gui X11)
+     if("${CMAKE_SYSTEM}" MATCHES "Linux")
+         target_link_libraries(keepassxc_core ${KEYUTILS_LIBRARIES})
+     endif()
 diff --git a/src/gui/DatabaseOpenWidget.cpp b/src/gui/DatabaseOpenWidget.cpp
 index 8d3d0b4..a51606a 100644
 --- a/src/gui/DatabaseOpenWidget.cpp
