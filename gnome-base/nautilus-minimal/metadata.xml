@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<use>
+		<flag name="strip-locale">Drop bundled translations (~18M) for an English-only tree</flag>
+		<flag name="keep-dev">Keep headers/pkgconfig/typelibs/man and the subproject CLIs in the bundle</flag>
+		<flag name="gvfs">Pull <pkg>gnome-base/gvfs</pkg> for trash://, recent://, network and MTP mounts</flag>
+		<flag name="video-thumbnails">Pull <pkg>media-video/ffmpegthumbnailer</pkg> so video files get thumbnails</flag>
+		<flag name="previewer">Pull <pkg>gnome-extra/sushi</pkg> for spacebar Quick Look previews</flag>
+		<flag name="localsearch">Pull <pkg>app-misc/localsearch</pkg> for full indexed search (otherwise live recursive search)</flag>
+		<flag name="heif">Enable the HEIF/HEIC <pkg>media-libs/glycin-loaders</pkg> image loader (preview + thumbnails)</flag>
+		<flag name="jpegxl">Enable the JPEG XL <pkg>media-libs/glycin-loaders</pkg> image loader (preview + thumbnails)</flag>
+		<flag name="svg">Enable the SVG <pkg>media-libs/glycin-loaders</pkg> image loader (preview + thumbnails)</flag>
+	</use>
+	<upstream>
+		<remote-id type="github">authorisation/nautilus-minimal</remote-id>
+	</upstream>
+</pkgmetadata>

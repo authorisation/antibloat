@@ -16,7 +16,8 @@ S="${WORKDIR}/${REPO}-${COMMIT}"
 LICENSE="GPL-3+ LGPL-2.1+ GPL-2+ LGPL-2+ LGPL-3+ BSD-2"
 SLOT="0"
 KEYWORDS="~amd64 ~arm64 ~loong ~ppc64 ~riscv ~x86"
-IUSE="+strip-locale keep-dev"
+
+IUSE="+strip-locale keep-dev gvfs video-thumbnails previewer localsearch heif jpegxl svg"
 
 RESTRICT="network-sandbox test mirror"
 
@@ -24,7 +25,33 @@ RDEPEND="
 	>=dev-libs/glib-2.84.0:2
 	>=gui-libs/gtk-4.20:4[introspection]
 	media-libs/glycin[gtk]
-	media-libs/glycin-loaders
+	media-libs/glycin-loaders[heif?,jpegxl?,svg?]
+	>=gnome-base/gsettings-desktop-schemas-46
+	app-text/iso-codes
+	>=dev-libs/libyaml-0.2
+	net-misc/curl
+	dev-libs/libxml2
+	app-arch/zstd:=
+	app-arch/xz-utils
+	dev-db/sqlite:3
+	app-arch/libarchive:=
+	net-libs/libsoup:3.0
+	dev-libs/json-glib
+	>=dev-libs/icu-56:=
+	dev-libs/fribidi
+	x11-libs/pango
+	x11-libs/gdk-pixbuf:2
+	gvfs? ( gnome-base/gvfs )
+	video-thumbnails? ( media-video/ffmpegthumbnailer )
+	previewer? ( gnome-extra/sushi )
+	localsearch? ( app-misc/localsearch )
+"
+# DEPEND excludes the pure-runtime add-ons (gvfs/thumbnailer/sushi/localsearch
+# are not needed to build the bundled tree).
+DEPEND="
+	>=dev-libs/glib-2.84.0:2
+	>=gui-libs/gtk-4.20:4[introspection]
+	media-libs/glycin[gtk]
 	>=gnome-base/gsettings-desktop-schemas-46
 	app-text/iso-codes
 	>=dev-libs/libyaml-0.2
@@ -41,7 +68,6 @@ RDEPEND="
 	x11-libs/pango
 	x11-libs/gdk-pixbuf:2
 "
-DEPEND="${RDEPEND}"
 BDEPEND="
 	dev-build/meson
 	dev-build/ninja
@@ -80,7 +106,7 @@ src_install() {
 	cat > "${T}"/nautilus-contained.desktop <<-EOF
 [Desktop Entry]
 Type=Application
-Version=50.1
+Version=501
 Name=Files
 GenericName=File Manager
 Comment=Browse the file system with the self-contained Nautilus
@@ -104,4 +130,11 @@ pkg_postinst() {
 	elog "* Be very careful with this piece of software"
 	elog "* I have no idea what abomination I created here but lets see"
 	elog "* Just run using /usr/bin/nautilus"
+	elog "*"
+	elog "* Optional USE flags (all pure runtime, no rebuild needed):"
+	elog "*   video-thumbnails - ffmpegthumbnailer for video thumbnails"
+	elog "*   heif/jpegxl/svg  - extra glycin image loaders (preview+thumbs)"
+	elog "*   gvfs (default on)- trash:// recent:// network mounts (mtp etc.)"
+	elog "*   previewer        - spacebar Quick Look via gnome-extra/sushi"
+	elog "*   localsearch      - full indexed search daemon (else recursive)"
 }
