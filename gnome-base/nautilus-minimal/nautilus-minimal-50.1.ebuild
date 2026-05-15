@@ -47,7 +47,7 @@ BDEPEND="
 	dev-build/ninja
 	dev-vcs/git
 	dev-util/blueprint-compiler
-	dev-libs/sassc
+	dev-lang/sassc
 	dev-lang/vala
 	>=dev-libs/gobject-introspection-1.54
 	dev-util/gperf
