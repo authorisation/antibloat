@@ -5,26 +5,26 @@ GdkFrameClockIdle hardcodes a 60Hz fallback (FRAME_INTERVAL = 16667us) and
 only revises it upward from a compositor's _NET_WM_FRAME_DRAWN /
 _NET_WM_FRAME_TIMINGS messages. Standalone X11 compositors (picom etc.) and
 bare WMs (dwm) do not send those, so GTK4 animation is capped at 60fps on
-high-refresh monitors. This adds a non-reffed back-pointer from the idle
-clock to its owning GdkSurface and, when there is no compositor timing
-(prev_timings->refresh_interval == 0) on an X11 display, uses
-gdk_monitor_get_refresh_rate() of the surface's monitor instead of the
-constant. Clamped to [30,1000] Hz. Wayland and compositor-fed X11 are
-unaffected (they have a nonzero refresh_interval; Wayland is also excluded by
-the GDK_IS_X11_DISPLAY guard).
+high-refresh monitors. This adds a back-pointer from the idle clock to its
+owning GdkSurface (held as a weak pointer so it cannot dangle when the
+surface is destroyed before the clock, e.g. closing a dialog/tab) and, when
+there is no compositor timing (prev_timings->refresh_interval == 0) on an
+X11 display, uses gdk_monitor_get_refresh_rate() of the surface's monitor
+instead of the constant. Clamped to [30,1000] Hz. Wayland and
+compositor-fed X11 are unaffected.
 
-Downstream antibloat patch, not submitted upstream.
-RE-VERIFY ON EVERY gui-libs/gtk VERSION BUMP: it touches the private
-GdkFrameClockIdlePrivate struct and gdk_frame_clock_paint_idle(), which change
-between GTK releases. Authored against and verified (patch -p1 / git apply
---check) on GTK 4.22.4.
+Downstream antibloat patch, not submitted upstream. RE-VERIFY ON EVERY
+gui-libs/gtk VERSION BUMP: it touches the private GdkFrameClockIdlePrivate
+struct, gdk_frame_clock_idle_dispose() and gdk_frame_clock_paint_idle(),
+which change between GTK releases. Authored against and verified
+(patch -p1 / git apply --check) on GTK 4.22.4.
 
---- a/gdk/gdkframeclockidleprivate.h
-+++ b/gdk/gdkframeclockidleprivate.h
+--- a/gdk/gdkframeclockidleprivate.h	2026-05-16 12:21:02.173181205 +0200
++++ b/gdk/gdkframeclockidleprivate.h	2026-05-16 12:21:28.696001716 +0200
 @@ -59,5 +59,11 @@
-
+ 
  GdkFrameClock *_gdk_frame_clock_idle_new            (void);
-
+ 
 +/* Downstream (antibloat): associate the owning surface so the idle clock can
 + * fall back to the monitor refresh rate on X11 when no compositor frame-timing
 + * feedback is available (picom/standalone WM => unlock >60Hz GTK4 animation). */
@@ -32,9 +32,9 @@ between GTK releases. Authored against and verified (patch -p1 / git apply
 +                                                     GdkSurface    *surface);
 +
  G_END_DECLS
-
---- a/gdk/gdkframeclockidle.c
-+++ b/gdk/gdkframeclockidle.c
+ 
+--- a/gdk/gdkframeclockidle.c	2026-05-16 12:21:02.173181205 +0200
++++ b/gdk/gdkframeclockidle.c	2026-05-16 12:43:06.260069672 +0200
 @@ -30,6 +30,13 @@
  #include "gdkframeclockprivate.h"
  #include "gdkprivate.h"
@@ -46,7 +46,7 @@ between GTK releases. Authored against and verified (patch -p1 / git apply
 +#ifdef GDK_WINDOWING_X11
 +#include "x11/gdkx11display.h"
 +#endif
-
+ 
  #ifdef G_OS_WIN32
  #include <windows.h>
 @@ -72,6 +79,11 @@
@@ -59,12 +59,12 @@ between GTK releases. Authored against and verified (patch -p1 / git apply
 +   * member offsets are unchanged. */
 +  GdkSurface *surface;
  };
-
+ 
  static gboolean gdk_frame_clock_flush_idle (void *data);
 @@ -79,6 +91,47 @@
-
+ 
  G_DEFINE_TYPE_WITH_PRIVATE (GdkFrameClockIdle, gdk_frame_clock_idle, GDK_TYPE_FRAME_CLOCK)
-
+ 
 +/* Downstream (antibloat): when no compositor supplies frame timings on X11
 + * (picom / standalone WM => prev_timings->refresh_interval stays 0), derive
 + * the frame interval from the owning surface's monitor refresh rate instead
@@ -109,8 +109,22 @@ between GTK releases. Authored against and verified (patch -p1 / git apply
  static gint64 sleep_serial;
  static gint64 sleep_source_prepare_time;
  static GSource *sleep_source;
-@@ -461,6 +514,15 @@
-
+@@ -169,6 +222,13 @@
+     }
+ #endif
+ 
++  if (priv->surface != NULL)
++    {
++      g_object_remove_weak_pointer (G_OBJECT (priv->surface),
++                                    (gpointer *) &priv->surface);
++      priv->surface = NULL;
++    }
++
+   G_OBJECT_CLASS (gdk_frame_clock_idle_parent_class)->dispose (object);
+ }
+ 
+@@ -461,6 +521,15 @@
+ 
                if (prev_timings && prev_timings->refresh_interval)
                  frame_interval = prev_timings->refresh_interval;
 +              else
@@ -122,11 +136,11 @@ between GTK releases. Authored against and verified (patch -p1 / git apply
 +                  if (mon_interval != 0)
 +                    frame_interval = mon_interval;
 +                }
-
+ 
                priv->frame_time = g_get_monotonic_time ();
-
-@@ -832,3 +894,13 @@
-
+ 
+@@ -832,3 +901,34 @@
+ 
    return GDK_FRAME_CLOCK (clock);
  }
 +
@@ -134,18 +148,39 @@ between GTK releases. Authored against and verified (patch -p1 / git apply
 +_gdk_frame_clock_idle_set_surface (GdkFrameClock *clock,
 +                                   GdkSurface    *surface)
 +{
++  GdkFrameClockIdlePrivate *priv;
++
 +  if (!GDK_IS_FRAME_CLOCK_IDLE (clock))
 +    return;
 +
-+  GDK_FRAME_CLOCK_IDLE (clock)->priv->surface = surface;
++  priv = GDK_FRAME_CLOCK_IDLE (clock)->priv;
++
++  if (priv->surface == surface)
++    return;
++
++  /* Non-owning back-pointer kept as a weak pointer so it auto-nulls if the
++   * surface is finalized while this clock briefly outlives it (e.g. closing
++   * a dialog/tab: the surface is destroyed but a queued paint-idle still
++   * runs). Without this, gdk_frame_clock_idle_monitor_interval() would
++   * dereference a freed surface (gdk_surface_get_display: GDK_IS_SURFACE
++   * assertion spam / use-after-free). */
++  if (priv->surface != NULL)
++    g_object_remove_weak_pointer (G_OBJECT (priv->surface),
++                                  (gpointer *) &priv->surface);
++
++  priv->surface = surface;
++
++  if (surface != NULL)
++    g_object_add_weak_pointer (G_OBJECT (surface),
++                               (gpointer *) &priv->surface);
 +}
---- a/gdk/gdksurface.c
-+++ b/gdk/gdksurface.c
+--- a/gdk/gdksurface.c	2026-05-16 12:21:02.173181205 +0200
++++ b/gdk/gdksurface.c	2026-05-16 12:21:44.009630690 +0200
 @@ -2451,6 +2451,7 @@
    if (clock)
      {
        g_object_ref (clock);
 +      _gdk_frame_clock_idle_set_surface (clock, surface);
-
+ 
        g_signal_connect (G_OBJECT (clock),
                          "flush-events",
