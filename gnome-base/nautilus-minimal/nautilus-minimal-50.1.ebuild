@@ -11,7 +11,7 @@ DESCRIPTION="GNOME Files (Nautilus) as a self-contained /opt directory (bundled 
 HOMEPAGE="https://github.com/authorisation/nautilus-minimal"
 
 REPO="nautilus-minimal"
-COMMIT="d7d0c80339ba9f7e5e3df05412c9ce518d9f40f0"
+COMMIT="03f502dae1cf7afaf6d8fa13c1a638da743b25c7"
 SRC_URI="https://github.com/authorisation/${REPO}/archive/${COMMIT}.tar.gz -> ${REPO}-${COMMIT}.tar.gz"
 S="${WORKDIR}/${REPO}-${COMMIT}"
 
@@ -120,6 +120,7 @@ src_install() {
 	STRIP_LOCALE="$(usex strip-locale 1 0)" \
 	KEEP_DEV="$(usex keep-dev 1 0)" \
 	NAUTILUS_PYTHON="$(usex python 1 0)" \
+	NAUTILUS_LOCALSEARCH="$(usex localsearch 1 0)" \
 		bash "${S}"/build-aux/contained-setup.sh || die "contained-setup.sh failed"
 
 	cat > "${T}"/nautilus-contained.desktop <<-EOF
