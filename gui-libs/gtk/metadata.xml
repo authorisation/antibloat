@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+		<flag name="highrefresh">Apply a downstream patch so GTK4's frame clock uses the monitor refresh rate on X11 when no compositor reports frame timings.</flag>
+	</use>
+</pkgmetadata>

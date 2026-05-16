@@ -14,9 +14,10 @@ REQUIRED_USE="
 	|| ( aqua wayland X )
 	gtk-doc? ( introspection )
 	test? ( introspection )
+	highrefresh? ( X )
 "
 KEYWORDS="~amd64 ~arm ~arm64 ~loong ~ppc ~ppc64 ~riscv ~sparc ~x86"
-IUSE="aqua broadway cloudproviders colord cups examples gstreamer gtk-doc +introspection sysprof test vulkan wayland +X cpu_flags_x86_f16c"
+IUSE="aqua broadway cloudproviders colord cups examples gstreamer gtk-doc highrefresh +introspection sysprof test vulkan wayland +X cpu_flags_x86_f16c"
 
 # librsvg for svg icons and "!8541 Use librsvg for symbolics that we
 #     can't parse ourselves" (formerly a PDEPEND to avoid circular dep
@@ -132,6 +133,9 @@ pkg_setup() {
 
 src_prepare() {
 	default
+
+	use highrefresh && eapply "${FILESDIR}"/gtk4-x11-frameclock-monitor-refresh.patch
+
 	xdg_environment_reset
 
 	# Nothing should use gtk4-update-icon-cache and an unversioned one is shipped by dev-util/gtk-update-icon-cache
@@ -290,6 +294,24 @@ pkg_postinst() {
 
 	if use examples ; then
 		optfeature "syntax highlighting in gtk4-demo" app-text/highlight
+	fi
+
+	if use highrefresh ; then
+		elog
+		elog "USE=highrefresh is enabled: a downstream patch makes GTK4's"
+		elog "frame clock use the monitor refresh rate on X11 when no"
+		elog "compositor reports frame timings (picom, or a bare WM such as"
+		elog "dwm), unlocking >60Hz GTK4 animation on high-refresh displays."
+		elog
+		elog "  * No-op under Wayland and under frame-timing compositors"
+		elog "    (Mutter/KWin) -- they already pace correctly."
+		elog "  * It patches PRIVATE GDK internals (GdkFrameClockIdle,"
+		elog "    gdk_frame_clock_paint_idle). If a future gui-libs/gtk bump"
+		elog "    fails to build/apply, this flag is the cause: the patch"
+		elog "    (\${FILESDIR}/gtk4-x11-frameclock-monitor-refresh.patch)"
+		elog "    must be re-verified/re-authored for the new GTK version."
+		elog "  * Refresh rate is clamped to [30,1000] Hz; animation CPU"
+		elog "    scales with the rate (idle is unaffected)."
 	fi
 }
 

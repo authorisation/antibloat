@@ -1,0 +1,151 @@
+Derive the GTK4 frame-clock interval from the monitor refresh rate on X11
+when no compositor supplies frame-timing feedback.
+
+GdkFrameClockIdle hardcodes a 60Hz fallback (FRAME_INTERVAL = 16667us) and
+only revises it upward from a compositor's _NET_WM_FRAME_DRAWN /
+_NET_WM_FRAME_TIMINGS messages. Standalone X11 compositors (picom etc.) and
+bare WMs (dwm) do not send those, so GTK4 animation is capped at 60fps on
+high-refresh monitors. This adds a non-reffed back-pointer from the idle
+clock to its owning GdkSurface and, when there is no compositor timing
+(prev_timings->refresh_interval == 0) on an X11 display, uses
+gdk_monitor_get_refresh_rate() of the surface's monitor instead of the
+constant. Clamped to [30,1000] Hz. Wayland and compositor-fed X11 are
+unaffected (they have a nonzero refresh_interval; Wayland is also excluded by
+the GDK_IS_X11_DISPLAY guard).
+
+Downstream antibloat patch, not submitted upstream.
+RE-VERIFY ON EVERY gui-libs/gtk VERSION BUMP: it touches the private
+GdkFrameClockIdlePrivate struct and gdk_frame_clock_paint_idle(), which change
+between GTK releases. Authored against and verified (patch -p1 / git apply
+--check) on GTK 4.22.4.
+
+--- a/gdk/gdkframeclockidleprivate.h
++++ b/gdk/gdkframeclockidleprivate.h
+@@ -59,5 +59,11 @@
+
+ GdkFrameClock *_gdk_frame_clock_idle_new            (void);
+
++/* Downstream (antibloat): associate the owning surface so the idle clock can
++ * fall back to the monitor refresh rate on X11 when no compositor frame-timing
++ * feedback is available (picom/standalone WM => unlock >60Hz GTK4 animation). */
++void           _gdk_frame_clock_idle_set_surface    (GdkFrameClock *clock,
++                                                     GdkSurface    *surface);
++
+ G_END_DECLS
+
+--- a/gdk/gdkframeclockidle.c
++++ b/gdk/gdkframeclockidle.c
+@@ -30,6 +30,13 @@
+ #include "gdkframeclockprivate.h"
+ #include "gdkprivate.h"
+ #include "gdkprofilerprivate.h"
++#include "gdksurface.h"
++#include "gdkdisplay.h"
++#include "gdkmonitor.h"
++
++#ifdef GDK_WINDOWING_X11
++#include "x11/gdkx11display.h"
++#endif
+
+ #ifdef G_OS_WIN32
+ #include <windows.h>
+@@ -72,6 +79,11 @@
+ #ifdef G_OS_WIN32
+   guint begin_period : 1;
+ #endif
++
++  /* Downstream (antibloat): owning surface, not reffed. Used only for the
++   * X11 no-compositor monitor-refresh fallback. Appended last so existing
++   * member offsets are unchanged. */
++  GdkSurface *surface;
+ };
+
+ static gboolean gdk_frame_clock_flush_idle (void *data);
+@@ -79,6 +91,47 @@
+
+ G_DEFINE_TYPE_WITH_PRIVATE (GdkFrameClockIdle, gdk_frame_clock_idle, GDK_TYPE_FRAME_CLOCK)
+
++/* Downstream (antibloat): when no compositor supplies frame timings on X11
++ * (picom / standalone WM => prev_timings->refresh_interval stays 0), derive
++ * the frame interval from the owning surface's monitor refresh rate instead
++ * of the hardcoded 60Hz FRAME_INTERVAL. Returns an interval in microseconds,
++ * or 0 if not applicable (no surface, not X11, invalid monitor). Clamped to
++ * [30,1000] Hz to bound CPU and guard against a misreported refresh rate. */
++static gint64
++gdk_frame_clock_idle_monitor_interval (GdkFrameClockIdle *clock_idle)
++{
++  GdkSurface *surface = clock_idle->priv->surface;
++  GdkDisplay *display;
++  GdkMonitor *monitor;
++  int rate_mhz;
++
++  if (surface == NULL)
++    return 0;
++
++  display = gdk_surface_get_display (surface);
++  if (display == NULL)
++    return 0;
++
++#ifdef GDK_WINDOWING_X11
++  if (!GDK_IS_X11_DISPLAY (display))
++    return 0;
++#else
++  return 0;
++#endif
++
++  monitor = gdk_display_get_monitor_at_surface (display, surface);
++  if (monitor == NULL || !gdk_monitor_is_valid (monitor))
++    return 0;
++
++  rate_mhz = gdk_monitor_get_refresh_rate (monitor); /* millihertz */
++  if (rate_mhz < 30000)
++    rate_mhz = 30000;       /* clamp to >= 30 Hz */
++  if (rate_mhz > 1000000)
++    rate_mhz = 1000000;     /* clamp to <= 1000 Hz */
++
++  return G_GINT64_CONSTANT (1000000000) / rate_mhz; /* microseconds */
++}
++
+ static gint64 sleep_serial;
+ static gint64 sleep_source_prepare_time;
+ static GSource *sleep_source;
+@@ -461,6 +514,15 @@
+
+               if (prev_timings && prev_timings->refresh_interval)
+                 frame_interval = prev_timings->refresh_interval;
++              else
++                {
++                  /* No compositor frame-timing feedback (picom/standalone WM
++                   * on X11). Use the surface's monitor refresh rate instead
++                   * of the 60Hz FRAME_INTERVAL default. */
++                  gint64 mon_interval = gdk_frame_clock_idle_monitor_interval (clock_idle);
++                  if (mon_interval != 0)
++                    frame_interval = mon_interval;
++                }
+
+               priv->frame_time = g_get_monotonic_time ();
+
+@@ -832,3 +894,13 @@
+
+   return GDK_FRAME_CLOCK (clock);
+ }
++
++void
++_gdk_frame_clock_idle_set_surface (GdkFrameClock *clock,
++                                   GdkSurface    *surface)
++{
++  if (!GDK_IS_FRAME_CLOCK_IDLE (clock))
++    return;
++
++  GDK_FRAME_CLOCK_IDLE (clock)->priv->surface = surface;
++}
+--- a/gdk/gdksurface.c
++++ b/gdk/gdksurface.c
+@@ -2451,6 +2451,7 @@
+   if (clock)
+     {
+       g_object_ref (clock);
++      _gdk_frame_clock_idle_set_surface (clock, surface);
+
+       g_signal_connect (G_OBJECT (clock),
+                         "flush-events",
