@@ -11,6 +11,7 @@
 		<flag name="heif">Enable the HEIF/HEIC <pkg>media-libs/glycin-loaders</pkg> image loader (preview + thumbnails)</flag>
 		<flag name="jpegxl">Enable the JPEG XL <pkg>media-libs/glycin-loaders</pkg> image loader (preview + thumbnails)</flag>
 		<flag name="svg">Enable the SVG <pkg>media-libs/glycin-loaders</pkg> image loader (preview + thumbnails)</flag>
+		<flag name="python">Bundle nautilus-python so Python file-manager extensions work (drop .py files in <path>/opt/nautilus/share/nautilus-python/extensions/</path>); also builds the GObject-Introspection typelib and pulls <pkg>dev-python/pygobject</pkg></flag>
 	</use>
 	<upstream>
 		<remote-id type="github">authorisation/nautilus-minimal</remote-id>
