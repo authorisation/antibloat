@@ -9,7 +9,7 @@ DESCRIPTION="File Roller archive manager as a self-contained /opt directory (bun
 HOMEPAGE="https://github.com/authorisation/fileroller-minimal"
 
 REPO="fileroller-minimal"
-COMMIT="9b138f131dd923d9e9a38338ae83c75b86bef9a2"
+COMMIT="e19c571cd1ec70a28137382ce3b5a0fad0fa95f6"
 SRC_URI="https://github.com/authorisation/${REPO}/archive/${COMMIT}.tar.gz -> ${REPO}-${COMMIT}.tar.gz"
 S="${WORKDIR}/${REPO}-${COMMIT}"
 
