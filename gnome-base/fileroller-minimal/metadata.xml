@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<use>
+		<flag name="strip-locale">Drop bundled translations for an English-only tree</flag>
+		<flag name="keep-dev">Keep headers/pkgconfig/typelibs/man and the subproject CLIs in the bundle</flag>
+		<flag name="gvfs">Pull <pkg>gnome-base/gvfs</pkg> for trash://, recent://, network and MTP mounts</flag>
+		<flag name="nautilus">Build the Nautilus right-click "Extract Here/To…" extension and install it into the contained <pkg>gnome-base/nautilus-minimal</pkg> (requires its <code>keep-dev</code>); the .so lives in /opt/nautilus, so re-emerge after changing nautilus-minimal</flag>
+	</use>
+	<upstream>
+		<remote-id type="github">authorisation/fileroller-minimal</remote-id>
+	</upstream>
+</pkgmetadata>
