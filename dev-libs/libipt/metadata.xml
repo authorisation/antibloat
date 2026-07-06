@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription lang="en">
+		libipt is a library for decoding Intel Processor Trace (Intel PT).
+		Intel PT is an extension of Intel Architecture that captures
+		information about software execution using dedicated hardware
+		facilities that cause only minimal performance perturbation.
+	</longdescription>
+	<use>
+		<flag name="ptdump">Build ptdump, a low-level Intel PT packet dumper</flag>
+		<flag name="ptseg">Build ptseg, a PSB segment finder</flag>
+		<flag name="pttc">Build pttc, the Intel PT test compiler</flag>
+		<flag name="ptxed">Build ptxed, an instruction-flow dumper (requires Intel XED)</flag>
+		<flag name="sideband">Build libipt-sb, the sideband correlation library</flag>
+		<flag name="threads">Enable the small amount of multi-threading support</flag>
+	</use>
+	<upstream>
+		<remote-id type="github">intel/libipt</remote-id>
+	</upstream>
+</pkgmetadata>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>you@example.com</email>
+		<name>Your Name</name>
+	</maintainer>
+	<longdescription lang="en">
+		Intel XED (X86 Encoder Decoder) is a library for encoding and decoding
+		X86 (IA32 and Intel64) instructions. It is the disassembler backend used
+		by ptxed from dev-libs/libipt, and by many trace and analysis tools.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">intelxed/xed</remote-id>
+		<bugs-to>https://github.com/intelxed/xed/issues</bugs-to>
+	</upstream>
+</pkgmetadata>
