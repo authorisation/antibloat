@@ -21,7 +21,7 @@ LICENSE="Apache-2.0"
 # libxed has an unversioned SONAME
 SLOT="0"
 KEYWORDS="amd64 ~x86"
-IUSE="static-libs"
+IUSE="static-libs tools"
 
 BDEPEND="${PYTHON_DEPS}"
 
@@ -58,6 +58,12 @@ src_compile() {
 
 	"${EPYTHON}" mfile.py --shared "${common[@]}" || die "libxed shared build failed"
 
+	if use tools; then
+    "${EPYTHON}" mfile.py examples --shared "${common[@]}" \
+    "${EPYTHON}" mfile.py examples --shared --build-dir=obj-tools "${common[@]}" \
+      || die "xed tools build failed"
+  fi
+
 	if use static-libs; then
 		"${EPYTHON}" mfile.py --static --build-dir=obj-static "${common[@]}" \
 			|| die "libxed static build failed"
@@ -76,6 +82,10 @@ src_install() {
 		"${EPYTHON}" mfile.py install --static --build-dir=obj-static "${common[@]}" \
 			--prefix="${ED}/usr" --prefix-lib-dir="$(get_libdir)" \
 			|| die "libxed static install failed"
+	fi
+
+	if use tools; then
+		dobin obj-tools/wkit/bin/xed
 	fi
 
 	dodoc README.md

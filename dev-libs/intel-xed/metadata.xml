@@ -10,6 +10,9 @@
 		X86 (IA32 and Intel64) instructions. It is the disassembler backend used
 		by ptxed from dev-libs/libipt, and by many trace and analysis tools.
 	</longdescription>
+	<use>
+		<flag name="tools">Build and install the xed command line encoder/decoder</flag>
+	</use>
 	<upstream>
 		<remote-id type="github">intelxed/xed</remote-id>
 		<bugs-to>https://github.com/intelxed/xed/issues</bugs-to>
