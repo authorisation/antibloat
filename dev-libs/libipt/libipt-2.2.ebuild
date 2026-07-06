@@ -20,6 +20,10 @@ RDEPEND="ptxed? ( dev-libs/intel-xed )"
 DEPEND="${RDEPEND}"
 BDEPEND="doc? ( app-text/pandoc )"
 
+PATCHES=(
+	"${FILESDIR}"/${P}-ptxed-drop-xed_decoded_inst_get_byte.patch
+)
+
 src_configure() {
 	local mycmakeargs=(
 		-DBUILD_SHARED_LIBS=$(usex static-libs OFF ON)
@@ -49,7 +53,6 @@ src_configure() {
 
 src_install() {
 	cmake_src_install
-
 	local tool
 	for tool in ptdump ptseg pttc ptxed; do
 		if use "${tool}" && [[ -x "${BUILD_DIR}/bin/${tool}" ]]; then
