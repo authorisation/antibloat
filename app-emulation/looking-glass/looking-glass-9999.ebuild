@@ -24,6 +24,7 @@ RDEPEND="acct-group/qemu
 	acct-user/qemu
 	media-libs/fontconfig:1.0
 	media-libs/libglvnd
+	sys-libs/libunwind
 	sys-libs/binutils-libs:=
 	x11-libs/libxkbcommon
 	obs? ( media-video/obs-studio )
