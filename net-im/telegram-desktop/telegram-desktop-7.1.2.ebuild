@@ -22,7 +22,6 @@ IUSE="dbus enchant +fonts screencast wayland webkit +X"
 CDEPEND="
 	!net-im/telegram-desktop-bin
 	app-arch/lz4:=
-	app-text/cmark-gfm:=
 	dev-cpp/abseil-cpp:=
 	dev-cpp/ada:=
 	dev-cpp/cld3:=
@@ -111,8 +110,6 @@ src_prepare() {
 	sed -e '/find_package(lz4 /d' -i cmake/external/lz4/CMakeLists.txt || die
 	sed -e '/find_package(Opus /d' -i cmake/external/opus/CMakeLists.txt || die
 	sed -e '/find_package(xxHash /d' -i cmake/external/xxhash/CMakeLists.txt || die
-	sed -e '/find_package(cmark-gfm\(-extensions\)\? /d' \
-		-i cmake/external/cmark_gfm/CMakeLists.txt || die
 
 	# Temporary workaround for https://bugs.gentoo.org/977603
 	sed -e '/find_package(minizip /d' \
@@ -125,6 +122,7 @@ src_prepare() {
 		tgcalls  # Telegram-specific library, no stable releases
 		xdg-desktop-portal  # Only a few xml files are used with gdbus-codegen
 		MicroTeX  # Telegram-specific fork, no stable releases
+		cmark-gfm  # No more find_package() fallback, always built bundled upstream
 	)
 	for x in Telegram/ThirdParty/*; do
 		has "${x##*/}" "${keep[@]}" || rm -r "${x}" || die
