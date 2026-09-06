@@ -5,7 +5,7 @@
 EAPI=8
 
 MODULES_OPTIONAL_IUSE="modules"
-inherit linux-mod-r1 toolchain-funcs unpacker
+inherit desktop linux-mod-r1 toolchain-funcs unpacker xdg
 
 MY_PV="$(ver_cut 1-3)" # 2026.4.0
 MY_BUILD="$(ver_cut 4)" # 23
@@ -35,7 +35,6 @@ RDEPEND="
 		media-libs/alsa-lib
 		x11-libs/gtk+:3
 		x11-libs/libdrm
-		x11-libs/libnotify
 		x11-libs/libxcb
 		x11-libs/libxkbcommon
 		x11-libs/pango
@@ -43,7 +42,7 @@ RDEPEND="
 	)
 "
 DEPEND=""
-BDEPEND=""
+BDEPEND="gui? ( media-gfx/icoutils )"
 
 QA_PREBUILT="opt/intel/oneapi/*"
 
@@ -90,6 +89,26 @@ src_install() {
 		find "${ED}${VTUNE_ROOT}/sepdk" \( -name '*.ko' -o -name '*.o' -o -name '*.mod*' -o -name '.*.cmd' \) -delete || die
 	fi
 
+	if use gui; then
+		local ico="${ED}${VTUNE_ROOT}/bin64/resources/app/icons/VTune.ico"
+		local icon
+		mkdir -p "${T}"/icon || die
+		icotool -x -o "${T}"/icon "${ico}" || die "icotool failed on VTune.ico"
+		icon=$(ls "${T}"/icon/*.png | sed -E 's/.*_([0-9]+)x[0-9]+x[0-9]+\.png$/\1 &/' \
+			| sort -rn | head -1 | cut -d' ' -f2)
+		[[ -n ${icon} ]] || die "no PNG frames in VTune.ico"
+		local size
+		size=$(sed -E 's/.*_([0-9]+)x[0-9]+x[0-9]+\.png$/\1/' <<<"${icon}")
+		newicon -s "${size}" "${icon}" vtune.png
+
+		make_desktop_entry \
+			"${VTUNE_ROOT}/bin64/vtune-gui %f" \
+			"Intel VTune Profiler" \
+			vtune \
+			"Development;Profiling;" \
+			"MimeType=application/x-vtune-result;\nStartupWMClass=vtune-gui\nKeywords=profiler;performance;hotspots;"
+	fi
+
 	if ! use gui; then
 		rm -rf "${ED}${VTUNE_ROOT}"/bin64/vtune-gui* "${ED}${VTUNE_ROOT}"/lib64/vtune-gui* || die
 	fi
@@ -100,6 +119,7 @@ src_install() {
 }
 
 pkg_postinst() {
+	xdg_pkg_postinst
 	linux-mod-r1_pkg_postinst
 
 	elog "VTune is installed under ${VTUNE_ROOT} (also /opt/intel/oneapi/vtune/latest)."
@@ -115,4 +135,8 @@ pkg_postinst() {
 		elog "/etc/modules-load.d. Device nodes default to the group given to insmod-sep;"
 		elog "add your user to it. Re-emerge after every kernel upgrade."
 	fi
+}
+
+pkg_postrm() {
+	xdg_pkg_postrm
 }
